@@ -1,11 +1,7 @@
-import dynamic from 'next/dynamic';
+'use client';
 
-// Dynamically import the ParticleSystemTest component with no SSR
-const ParticleSystemTest = dynamic(
-  () => import('@/components/visual/ParticleSystemTest').then(mod => mod.ParticleSystemTest),
-  { ssr: false }
-);
+import { CanvasRenderer } from '../src/components/CanvasRenderer';
 
 export default function Home() {
-  return <ParticleSystemTest />;
+  return <CanvasRenderer />;
 } 
