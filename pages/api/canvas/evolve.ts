@@ -1,17 +1,30 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ message: 'Method not allowed' });
   }
-  
-  const newState = {
-    id: 'canvas-1',
-    version: '2.0',
-    timeOfDay: new Date().getHours(),
-    success: true,
-    evolved: true
-  };
-  
-  return res.status(200).json(newState);
+
+  try {
+    const { type } = req.body;
+
+    // Mock evolution for now
+    const evolvedState = {
+      id: '1',
+      version: '1.0.0',
+      timeOfDay: type === 'time_evolution' ? 'night' : 'day',
+      weatherData: {
+        temperature: 68,
+        condition: 'clear',
+        humidity: 50
+      },
+      status: 'foundation-working',
+      lastUpdated: new Date().toISOString()
+    };
+
+    res.status(200).json(evolvedState);
+  } catch (error) {
+    console.error('Failed to evolve state:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 } 

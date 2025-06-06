@@ -1,100 +1,95 @@
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, CatmullRomCurve3, TubeGeometry, Mesh, Group, MeshPhongMaterial, Object3D } from 'three';
+import { Vector3, BufferGeometry, Float32BufferAttribute, LineBasicMaterial, Line } from 'three';
 import { ColorManager, RALPH_COLORS } from './ColorManager';
 
 interface FlowFieldProps {
+  colorManager: ColorManager;
   count?: number;
   length?: number;
-  radius?: number;
-  segments?: number;
 }
 
-export function FlowField({ 
-  count = 20, 
-  length = 10, 
-  radius = 0.1, 
-  segments = 64 
-}: FlowFieldProps) {
-  const groupRef = useRef<Group>(null);
-  const [colorManager, setColorManager] = useState<ColorManager | null>(null);
-  const time = useRef(0);
+export function FlowField({ colorManager, count = 50, length = 100 }: FlowFieldProps) {
+  const linesRef = useRef<Line[]>([]);
+  const timeRef = useRef(0);
 
-  useEffect(() => {
-    setColorManager(ColorManager.getInstance());
-  }, []);
+  // Create initial ribbon positions
+  const positions = useMemo(() => {
+    const pos: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const x = (Math.random() - 0.5) * 10;
+      const y = (Math.random() - 0.5) * 10;
+      const z = (Math.random() - 0.5) * 10;
+      pos.push(x, y, z);
+    }
+    return pos;
+  }, [count]);
 
-  // Create initial ribbon paths
-  const ribbons = useMemo(() => {
+  // Create geometries and materials for each ribbon
+  const geometries = useMemo(() => {
     return Array.from({ length: count }, () => {
-      const points: Vector3[] = [];
-      const startPoint = new Vector3(
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 10
-      );
-      
-      // Generate points for the ribbon path
-      for (let i = 0; i < length; i++) {
-        const t = i / (length - 1);
-        const point = new Vector3(
-          startPoint.x + Math.sin(t * Math.PI * 2) * 2,
-          startPoint.y + Math.cos(t * Math.PI * 2) * 2,
-          startPoint.z + Math.sin(t * Math.PI * 4) * 1
-        );
-        points.push(point);
-      }
-
-      const curve = new CatmullRomCurve3(points);
-      const geometry = new TubeGeometry(curve, segments, radius, 8, false);
-      
-      return {
-        curve,
-        geometry,
-        speed: 0.2 + Math.random() * 0.3,
-        phase: Math.random() * Math.PI * 2,
-      };
+      const geometry = new BufferGeometry();
+      const points = new Float32Array(length * 3);
+      geometry.setAttribute('position', new Float32BufferAttribute(points, 3));
+      return geometry;
     });
-  }, [count, length, radius, segments]);
+  }, [count, length]);
+
+  const materials = useMemo(() => {
+    return Array.from({ length: count }, (_, i) => {
+      const color = i % 2 === 0 ? RALPH_COLORS.primary : RALPH_COLORS.secondary;
+      return new LineBasicMaterial({ color, transparent: true, opacity: 0.6 });
+    });
+  }, [count]);
 
   useFrame((state, delta) => {
-    if (!groupRef.current || !colorManager) return;
-    
-    time.current += delta;
+    timeRef.current += delta;
     colorManager.update(delta);
 
-    // Update ribbon positions and colors
-    groupRef.current.children.forEach((child: Object3D, index: number) => {
-      if (!(child instanceof Mesh)) return;
+    linesRef.current.forEach((line, i) => {
+      const positions = line.geometry.attributes.position.array as Float32Array;
+      const basePos = new Vector3(
+        positions[0],
+        positions[1],
+        positions[2]
+      );
+
+      // Update each point in the ribbon
+      for (let j = 0; j < length; j++) {
+        const t = j / length;
+        const time = timeRef.current + i * 0.1;
+        
+        // Create flowing motion using noise-like functions
+        const x = basePos.x + Math.sin(time * 0.5 + t * 5) * 0.5;
+        const y = basePos.y + Math.cos(time * 0.3 + t * 4) * 0.5;
+        const z = basePos.z + Math.sin(time * 0.4 + t * 3) * 0.5;
+
+        positions[j * 3] = x;
+        positions[j * 3 + 1] = y;
+        positions[j * 3 + 2] = z;
+      }
+
+      line.geometry.attributes.position.needsUpdate = true;
       
-      const ribbon = ribbons[index];
-      const material = child.material as MeshPhongMaterial;
-      
-      // Update ribbon position
-      const t = (time.current * ribbon.speed + ribbon.phase) % 1;
-      const position = ribbon.curve.getPoint(t);
-      child.position.copy(position);
-      
-      // Update color
-      material.color = colorManager.getInterpolatedColor(position, time.current);
-      material.emissive = material.color.clone().multiplyScalar(0.2);
+      // Update material color with time-based effects
+      const material = line.material as LineBasicMaterial;
+      const color = colorManager.getGradient('primary', 'secondary', 
+        (Math.sin(timeRef.current * 0.5 + i * 0.1) + 1) * 0.5
+      );
+      material.color = color;
     });
   });
 
-  if (!colorManager) return null;
-
   return (
-    <group ref={groupRef}>
-      {ribbons.map((ribbon, index) => (
-        <mesh key={index} geometry={ribbon.geometry}>
-          <meshPhongMaterial
-            color={RALPH_COLORS.primary}
-            emissive={RALPH_COLORS.primary}
-            emissiveIntensity={0.2}
-            transparent
-            opacity={0.8}
-          />
-        </mesh>
+    <group>
+      {geometries.map((geometry, i) => (
+        <primitive
+          key={i}
+          ref={(el: Line) => {
+            if (el) linesRef.current[i] = el;
+          }}
+          object={new Line(geometry, materials[i])}
+        />
       ))}
     </group>
   );

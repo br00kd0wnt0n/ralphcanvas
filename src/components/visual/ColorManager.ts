@@ -1,54 +1,54 @@
-import { Color, Vector3 } from 'three';
+import { Color } from 'three';
 
 export const RALPH_COLORS = {
-  primary: new Color('#00ff88'),
-  secondary: new Color('#4169e1'),
-  accent: new Color('#ffa500'),
-  highlight: new Color('#ff1493'),
-  tertiary: new Color('#9370db'),
-};
+  primary: '#00ff88',
+  secondary: '#4169e1',
+  accent1: '#ffa500',
+  accent2: '#ff1493',
+  accent3: '#9370db',
+} as const;
 
 export class ColorManager {
-  private static instance: ColorManager;
-  private currentTime: number = 0;
-  private colorCycle: Color[] = Object.values(RALPH_COLORS);
-  private currentColorIndex: number = 0;
+  private colors: { [key: string]: Color };
+  private time: number;
 
-  private constructor() {}
-
-  static getInstance(): ColorManager {
-    if (!ColorManager.instance) {
-      ColorManager.instance = new ColorManager();
-    }
-    return ColorManager.instance;
+  constructor() {
+    this.colors = {
+      primary: new Color(RALPH_COLORS.primary),
+      secondary: new Color(RALPH_COLORS.secondary),
+      accent1: new Color(RALPH_COLORS.accent1),
+      accent2: new Color(RALPH_COLORS.accent2),
+      accent3: new Color(RALPH_COLORS.accent3),
+    };
+    this.time = 0;
   }
 
   update(deltaTime: number) {
-    this.currentTime += deltaTime;
-    if (this.currentTime >= 5) { // Change color every 5 seconds
-      this.currentTime = 0;
-      this.currentColorIndex = (this.currentColorIndex + 1) % this.colorCycle.length;
-    }
+    this.time += deltaTime;
   }
 
-  getCurrentColor(): Color {
-    return this.colorCycle[this.currentColorIndex];
-  }
-
-  getInterpolatedColor(position: Vector3, time: number): Color {
-    const baseColor = this.getCurrentColor();
-    const nextColor = this.colorCycle[(this.currentColorIndex + 1) % this.colorCycle.length];
+  getColor(name: keyof typeof RALPH_COLORS, intensity: number = 1): Color {
+    const baseColor = this.colors[name].clone();
+    const timeOffset = this.time * 0.5;
     
-    // Create a smooth transition between colors based on position and time
-    const t = (Math.sin(time * 0.5 + position.x * 0.1 + position.y * 0.1) + 1) * 0.5;
-    return baseColor.clone().lerp(nextColor, t);
+    // Add subtle pulsing effect
+    const pulse = Math.sin(timeOffset) * 0.1 + 0.9;
+    baseColor.multiplyScalar(pulse * intensity);
+    
+    return baseColor;
   }
 
-  getAmbientLightIntensity(time: number): number {
-    return 0.5 + Math.sin(time * 0.2) * 0.2; // Subtle pulsing ambient light
+  getGradient(startColor: keyof typeof RALPH_COLORS, endColor: keyof typeof RALPH_COLORS, t: number): Color {
+    const start = this.colors[startColor];
+    const end = this.colors[endColor];
+    return start.clone().lerp(end, t);
   }
 
-  getPointLightIntensity(time: number): number {
-    return 1 + Math.sin(time * 0.3) * 0.3; // More pronounced point light variation
+  getAmbientLight(): Color {
+    return this.getColor('primary', 0.2);
+  }
+
+  getDirectionalLight(): Color {
+    return this.getColor('secondary', 0.8);
   }
 } 

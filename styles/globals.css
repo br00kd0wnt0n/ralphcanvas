@@ -1,16 +1,11 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, sans-serif;
 } 

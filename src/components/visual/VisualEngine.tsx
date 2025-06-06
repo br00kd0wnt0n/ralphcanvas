@@ -1,27 +1,51 @@
-import { Suspense, useEffect, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useRef, useEffect, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { ColorManager } from './ColorManager';
 import { FlowField } from './FlowField';
 import { ParticleSystem } from './ParticleSystem';
-import { ColorManager } from './ColorManager';
 
 interface VisualEngineProps {
   className?: string;
 }
 
-export function VisualEngine({ className = '' }: VisualEngineProps) {
-  const [mounted, setMounted] = useState(false);
-  const [colorManager, setColorManager] = useState<ColorManager | null>(null);
+function Scene() {
+  const { camera } = useThree();
+  const colorManager = useRef(new ColorManager()).current;
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setColorManager(ColorManager.getInstance());
-  }, []);
+    // Set up camera
+    camera.position.set(0, 0, 15);
+    camera.lookAt(0, 0, 0);
+    setIsLoaded(true);
+  }, [camera]);
 
-  if (!mounted || !colorManager) return null;
+  if (!isLoaded) return null;
 
   return (
-    <div className={`w-full h-screen ${className}`}>
+    <>
+      <PerspectiveCamera makeDefault position={[0, 0, 15]} />
+      <OrbitControls enableZoom={false} enablePan={false} />
+      
+      {/* Lighting */}
+      <ambientLight intensity={0.2} color={colorManager.getAmbientLight()} />
+      <directionalLight
+        position={[10, 10, 5]}
+        intensity={0.8}
+        color={colorManager.getDirectionalLight()}
+      />
+
+      {/* Visual Components */}
+      <FlowField colorManager={colorManager} count={30} length={50} />
+      <ParticleSystem colorManager={colorManager} count={2000} size={0.03} />
+    </>
+  );
+}
+
+export function VisualEngine({ className = '' }: VisualEngineProps) {
+  return (
+    <div className={`w-full h-screen bg-black ${className}`}>
       <Canvas
         dpr={[1, 2]} // Responsive pixel ratio
         gl={{
@@ -30,40 +54,7 @@ export function VisualEngine({ className = '' }: VisualEngineProps) {
           powerPreference: 'high-performance',
         }}
       >
-        <Suspense fallback={null}>
-          <PerspectiveCamera
-            makeDefault
-            position={[0, 0, 15]}
-            fov={75}
-            near={0.1}
-            far={1000}
-          />
-          
-          {/* Lighting */}
-          <ambientLight intensity={colorManager.getAmbientLightIntensity(0)} />
-          <pointLight
-            position={[10, 10, 10]}
-            intensity={colorManager.getPointLightIntensity(0)}
-          />
-          <pointLight
-            position={[-10, -10, -10]}
-            intensity={colorManager.getPointLightIntensity(0)}
-          />
-
-          {/* Visual Components */}
-          <FlowField count={15} length={8} radius={0.05} />
-          <ParticleSystem count={2000} size={0.03} speed={0.3} />
-
-          {/* Controls */}
-          <OrbitControls
-            enableZoom={false}
-            enablePan={false}
-            autoRotate
-            autoRotateSpeed={0.5}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={Math.PI / 2}
-          />
-        </Suspense>
+        <Scene />
       </Canvas>
     </div>
   );
