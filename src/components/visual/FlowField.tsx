@@ -1,96 +1,122 @@
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Vector3, BufferGeometry, Float32BufferAttribute, LineBasicMaterial, Line } from 'three';
-import { ColorManager, RALPH_COLORS } from './ColorManager';
+import React, { useRef, useMemo, useEffect } from 'react';
+import { useThree } from '@react-three/fiber';
+import { BufferGeometry, Float32BufferAttribute, PointsMaterial, Points } from 'three';
+import { ColorManager } from './ColorManager';
 
 interface FlowFieldProps {
   colorManager: ColorManager;
   count?: number;
   length?: number;
+  flowSpeed?: number;
+  colorIntensity?: number;
 }
 
-export function FlowField({ colorManager, count = 50, length = 100 }: FlowFieldProps) {
-  const linesRef = useRef<Line[]>([]);
-  const timeRef = useRef(0);
+export const FlowField = React.memo(function FlowField({ 
+  colorManager,
+  count = 3,
+  length = 1,
+  flowSpeed = 1.0,
+  colorIntensity = 1.0
+}: FlowFieldProps) {
+  const pointsRef = useRef<Points>(null);
+  const hasLoggedRef = useRef(false);
+  const { viewport } = useThree();
 
-  // Create initial ribbon positions
-  const positions = useMemo(() => {
-    const pos: number[] = [];
-    for (let i = 0; i < count; i++) {
-      const x = (Math.random() - 0.5) * 10;
-      const y = (Math.random() - 0.5) * 10;
-      const z = (Math.random() - 0.5) * 10;
-      pos.push(x, y, z);
+  // Use fixed screen dimensions for coordinate space
+  const screenDimensions = useMemo(() => ({
+    width: 20,  // Fixed coordinate space width
+    height: 12  // 16:9-ish ratio
+  }), []); // Empty dependency array since these are constants
+
+  // Log initialization only once
+  useEffect(() => {
+    if (!hasLoggedRef.current) {
+      console.log('FlowField initialized:', { 
+        screenDimensions,
+        aspectRatio: screenDimensions.width / screenDimensions.height,
+        viewport,
+        props: { count, length, flowSpeed, colorIntensity }
+      });
+
+      // Log sample positions for verification
+      console.log('Sample particle positions:', {
+        bottomLeft: [-screenDimensions.width/2, -screenDimensions.height/2, 0],
+        center: [0, 0, 0],
+        topRight: [screenDimensions.width/2, screenDimensions.height/2, 0]
+      });
+
+      hasLoggedRef.current = true;
     }
-    return pos;
-  }, [count]);
+  }, [screenDimensions, viewport, count, length, flowSpeed, colorIntensity]);
 
-  // Create geometries and materials for each ribbon
-  const geometries = useMemo(() => {
-    return Array.from({ length: count }, () => {
-      const geometry = new BufferGeometry();
-      const points = new Float32Array(length * 3);
-      geometry.setAttribute('position', new Float32BufferAttribute(points, 3));
-      return geometry;
+  // Create static positions for particles using manual screen coordinates
+  const { positions, colors } = useMemo(() => {
+    const { width, height } = screenDimensions;
+    const pos = new Float32Array([
+      // Bottom row
+      -width/2, -height/2, 0,    // Bottom left
+      0, -height/2, 0,           // Bottom center
+      width/2, -height/2, 0,     // Bottom right
+      // Middle row
+      -width/2, 0, 0,            // Middle left
+      0, 0, 0,                   // Center
+      width/2, 0, 0,             // Middle right
+      // Top row
+      -width/2, height/2, 0,     // Top left
+      0, height/2, 0,            // Top center
+      width/2, height/2, 0       // Top right
+    ]);
+    
+    // Define colors (RGB pattern)
+    const cols = new Float32Array([
+      // Bottom row
+      1, 0, 0,     // Red
+      0, 1, 0,     // Green
+      0, 0, 1,     // Blue
+      // Middle row
+      1, 0, 0,     // Red
+      0, 1, 0,     // Green
+      0, 0, 1,     // Blue
+      // Top row
+      1, 0, 0,     // Red
+      0, 1, 0,     // Green
+      0, 0, 1      // Blue
+    ]);
+    
+    return { positions: pos, colors: cols };
+  }, [screenDimensions]); // Only recompute if screen dimensions change
+
+  // Create geometry and material
+  const geometry = useMemo(() => {
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    return geo;
+  }, [positions, colors]);
+
+  const material = useMemo(() => {
+    return new PointsMaterial({
+      size: 0.5,
+      vertexColors: true,
+      transparent: true,
+      opacity: 1.0,
+      sizeAttenuation: true
     });
-  }, [count, length]);
-
-  const materials = useMemo(() => {
-    return Array.from({ length: count }, (_, i) => {
-      const color = i % 2 === 0 ? RALPH_COLORS.primary : RALPH_COLORS.secondary;
-      return new LineBasicMaterial({ color, transparent: true, opacity: 0.6 });
-    });
-  }, [count]);
-
-  useFrame((state, delta) => {
-    timeRef.current += delta;
-    colorManager.update(delta);
-
-    linesRef.current.forEach((line, i) => {
-      const positions = line.geometry.attributes.position.array as Float32Array;
-      const basePos = new Vector3(
-        positions[0],
-        positions[1],
-        positions[2]
-      );
-
-      // Update each point in the ribbon
-      for (let j = 0; j < length; j++) {
-        const t = j / length;
-        const time = timeRef.current + i * 0.1;
-        
-        // Create flowing motion using noise-like functions
-        const x = basePos.x + Math.sin(time * 0.5 + t * 5) * 0.5;
-        const y = basePos.y + Math.cos(time * 0.3 + t * 4) * 0.5;
-        const z = basePos.z + Math.sin(time * 0.4 + t * 3) * 0.5;
-
-        positions[j * 3] = x;
-        positions[j * 3 + 1] = y;
-        positions[j * 3 + 2] = z;
-      }
-
-      line.geometry.attributes.position.needsUpdate = true;
-      
-      // Update material color with time-based effects
-      const material = line.material as LineBasicMaterial;
-      const color = colorManager.getGradient('primary', 'secondary', 
-        (Math.sin(timeRef.current * 0.5 + i * 0.1) + 1) * 0.5
-      );
-      material.color = color;
-    });
-  });
+  }, []); // Empty dependency array since material properties are static
 
   return (
-    <group>
-      {geometries.map((geometry, i) => (
-        <primitive
-          key={i}
-          ref={(el: Line) => {
-            if (el) linesRef.current[i] = el;
-          }}
-          object={new Line(geometry, materials[i])}
-        />
-      ))}
-    </group>
+    <primitive
+      ref={pointsRef}
+      object={new Points(geometry, material)}
+    />
   );
-} 
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  return (
+    prevProps.count === nextProps.count &&
+    prevProps.length === nextProps.length &&
+    prevProps.flowSpeed === nextProps.flowSpeed &&
+    prevProps.colorIntensity === nextProps.colorIntensity &&
+    prevProps.colorManager === nextProps.colorManager
+  );
+}); 

@@ -3,6 +3,8 @@ import { VisualEngine } from './visual/VisualEngine';
 import { CanvasState } from '../types/canvas';
 
 export function CanvasRenderer() {
+  console.log('CanvasRenderer component mounting...');
+
   const [state, setState] = useState<CanvasState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,10 @@ export function CanvasRenderer() {
     const interval = setInterval(fetchState, 5000); // Poll every 5 seconds
 
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    console.log('CanvasRenderer component mounted and initialized');
   }, []);
 
   if (error) {
