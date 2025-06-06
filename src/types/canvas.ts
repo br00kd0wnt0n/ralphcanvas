@@ -28,11 +28,14 @@ export interface CanvasMetadata {
 }
 
 export interface WeatherData {
+  location?: string;
   temperature: number;
   humidity: number;
   windSpeed: number;
   precipitation: number;
   cloudCover: number;
+  condition?: string;
+  timestamp?: Date;
 }
 
 export interface ColorPalette {
