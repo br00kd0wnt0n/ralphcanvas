@@ -1,59 +1,58 @@
 import { useState, useEffect } from 'react';
-
-export interface CanvasState {
-  timeOfDay: 'dawn' | 'day' | 'dusk' | 'night';
-  weather: 'clear' | 'cloudy' | 'rain' | 'storm' | 'fog';
-  lastModified: Date;
-}
-
-const DEFAULT_STATE: CanvasState = {
-  timeOfDay: 'day',
-  weather: 'clear',
-  lastModified: new Date()
-};
+import { CanvasState } from '../types/canvas';
 
 export function useCanvasState() {
-  const [state, setState] = useState<CanvasState>(DEFAULT_STATE);
+  const [state, setState] = useState<CanvasState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Update time of day based on actual time
   useEffect(() => {
-    const updateTimeOfDay = () => {
-      const hour = new Date().getHours();
-      let timeOfDay: CanvasState['timeOfDay'];
-      
-      if (hour >= 5 && hour < 8) timeOfDay = 'dawn';
-      else if (hour >= 8 && hour < 17) timeOfDay = 'day';
-      else if (hour >= 17 && hour < 20) timeOfDay = 'dusk';
-      else timeOfDay = 'night';
-
-      setState(prev => ({
-        ...prev,
-        timeOfDay,
-        lastModified: new Date()
-      }));
+    const fetchState = async () => {
+      try {
+        const response = await fetch('/api/canvas/current');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setState(data);
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to fetch canvas state');
+        console.error('Error fetching canvas state:', e);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    updateTimeOfDay();
-    const interval = setInterval(updateTimeOfDay, 60000); // Update every minute
-    return () => clearInterval(interval);
-  }, []);
+    // Initial fetch only
+    fetchState();
+  }, []); // Empty dependency array ensures this only runs once
 
-  // Simulate weather changes (in a real app, this would come from an API)
-  useEffect(() => {
-    const weatherTypes: CanvasState['weather'][] = ['clear', 'cloudy', 'rain', 'storm', 'fog'];
-    const weatherInterval = setInterval(() => {
-      if (Math.random() < 0.3) { // 30% chance of weather change
-        const newWeather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
-        setState(prev => ({
-          ...prev,
-          weather: newWeather,
-          lastModified: new Date()
-        }));
+  const updateState = async (newState: Partial<CanvasState>) => {
+    try {
+      const response = await fetch('/api/canvas/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          section: Object.keys(newState)[0],
+          value: Object.values(newState)[0]
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    }, 300000); // Check for weather changes every 5 minutes
 
-    return () => clearInterval(weatherInterval);
-  }, []);
+      const updatedState = await response.json();
+      setState(updatedState);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update canvas state');
+      console.error('Error updating canvas state:', e);
+    }
+  };
 
-  return { state, setState };
+  return { state, setState: updateState, error, isLoading };
 } 

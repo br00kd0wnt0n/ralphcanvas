@@ -14,7 +14,7 @@ interface EnhancedParticleSystemProps {
 
 export function EnhancedParticleSystem({
   count = 1000,
-  size = 0.05,
+  size = 0.15,
   speed = 0.5,
   colors = ['#ff0000', '#00ff00', '#0000ff'],
   distribution = 'random'
@@ -34,17 +34,17 @@ export function EnhancedParticleSystem({
       
       switch (distribution) {
         case 'cube':
-          // Create points in a 2x2x2 cube
-          x = (Math.random() - 0.5) * 2;
-          y = (Math.random() - 0.5) * 2;
-          z = (Math.random() - 0.5) * 2;
+          // Create points in a larger 4x4x4 cube
+          x = (Math.random() - 0.5) * 4;
+          y = (Math.random() - 0.5) * 4;
+          z = (Math.random() - 0.5) * 4;
           break;
           
         case 'sphere':
-          // Create points in a sphere using spherical coordinates
+          // Create points in a larger sphere
           const theta = Math.random() * Math.PI * 2;
           const phi = Math.acos(2 * Math.random() - 1);
-          const radius = Math.random();
+          const radius = Math.random() * 2; // Increased radius
           x = radius * Math.sin(phi) * Math.cos(theta);
           y = radius * Math.sin(phi) * Math.sin(theta);
           z = radius * Math.cos(phi);
@@ -52,18 +52,19 @@ export function EnhancedParticleSystem({
           
         case 'random':
         default:
-          // Random distribution in a larger space
-          x = (Math.random() - 0.5) * 4;
-          y = (Math.random() - 0.5) * 4;
-          z = (Math.random() - 0.5) * 4;
+          // Random distribution in a larger space with better vertical spread
+          x = (Math.random() - 0.5) * 6; // Increased horizontal spread
+          y = (Math.random() - 0.5) * 8; // Increased vertical spread
+          z = (Math.random() - 0.5) * 6; // Increased depth spread
       }
       
       pos[i3] = x;
       pos[i3 + 1] = y;
       pos[i3 + 2] = z;
       
-      // Assign colors cyclically
-      const color = colorObjects[i % colorObjects.length];
+      // Assign colors cyclically with increased brightness
+      const color = colorObjects[i % colorObjects.length].clone();
+      color.multiplyScalar(1.5); // Increase brightness
       cols[i3] = color.r;
       cols[i3 + 1] = color.g;
       cols[i3 + 2] = color.b;
@@ -85,7 +86,7 @@ export function EnhancedParticleSystem({
       size,
       vertexColors: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.9, // Increased opacity
       sizeAttenuation: true,
       blending: 2, // Additive blending for brighter particles
     });
@@ -98,17 +99,20 @@ export function EnhancedParticleSystem({
     const time = timeRef.current;
     const positions = pointsRef.current.geometry.attributes.position.array as Float32Array;
     
-    // Update particle positions with organic movement
+    // Update particle positions with more dynamic movement
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
       const x = positions[i3];
       const y = positions[i3 + 1];
       const z = positions[i3 + 2];
       
-      // Create organic movement based on time and position
-      positions[i3] = x + Math.sin(time * speed + y * 0.1) * speed * 0.1;
-      positions[i3 + 1] = y + Math.cos(time * speed + z * 0.1) * speed * 0.1;
-      positions[i3 + 2] = z + Math.sin(time * speed + x * 0.1) * speed * 0.05;
+      // Create more dynamic movement with increased amplitude
+      positions[i3] = x + Math.sin(time * speed + y * 0.1) * speed * 0.2;
+      positions[i3 + 1] = y + Math.cos(time * speed + z * 0.1) * speed * 0.2;
+      positions[i3 + 2] = z + Math.sin(time * speed + x * 0.1) * speed * 0.1;
+      
+      // Add vertical drift to ensure particles don't get stuck
+      positions[i3 + 1] += Math.sin(time * 0.2 + i * 0.01) * 0.01;
     }
     
     pointsRef.current.geometry.attributes.position.needsUpdate = true;

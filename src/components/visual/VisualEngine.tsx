@@ -97,11 +97,11 @@ function Scene() {
 
   useEffect(() => {
     // Set up camera with better initial position and settings
-    const distance = Math.max(viewport.width, viewport.height) * 0.6; // Reduced distance for better visibility
+    const distance = Math.max(viewport.width, viewport.height) * 0.8; // Increased distance for better visibility
     camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
     if (camera instanceof ThreePerspectiveCamera) {
-      camera.fov = 45; // Narrower field of view for better vertical space utilization
+      camera.fov = 60; // Adjusted field of view for better perspective
       camera.near = 0.1;
       camera.far = 2000;
       camera.updateProjectionMatrix();
@@ -116,8 +116,8 @@ function Scene() {
       <OrbitControls 
         enableZoom={true} 
         enablePan={true}
-        minDistance={10}  // Adjusted for new camera distance
-        maxDistance={40}  // Adjusted for new camera distance
+        minDistance={Math.max(viewport.width, viewport.height) * 0.5}  // Adjusted for viewport
+        maxDistance={Math.max(viewport.width, viewport.height) * 2}   // Adjusted for viewport
         minPolarAngle={Math.PI / 6} // Limit vertical rotation
         maxPolarAngle={Math.PI * 5/6}
         target={[0, 0, 0]}
@@ -179,14 +179,17 @@ export function VisualEngine({ className = '' }: VisualEngineProps) {
 
   return (
     <div 
-      className={`fixed inset-0 w-screen h-screen bg-black ${className}`}
+      className={`fixed inset-0 w-screen h-screen ${className}`}
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
+        right: 0,
+        bottom: 0,
         width: '100vw',
         height: '100vh',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        background: '#000000'
       }}
     >
       <Canvas
@@ -197,19 +200,23 @@ export function VisualEngine({ className = '' }: VisualEngineProps) {
             camera.fov = 75;
             camera.updateProjectionMatrix();
           }
+          gl.setClearColor(0x000000, 0); // Set clear color to black with 0 opacity
           console.log('Camera forced on creation:', camera.position);
         }}
         gl={{
           antialias: true,
           alpha: true,
-          powerPreference: 'high-performance',
+          powerPreference: 'high-performance'
         }}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
+          right: 0,
+          bottom: 0,
           width: '100%',
-          height: '100%'
+          height: '100%',
+          background: 'transparent'
         }}
       >
         <Scene />

@@ -4,6 +4,7 @@ import { Vector3 } from 'three';
 import { FlowField } from './FlowField';
 import { ColorManager } from './ColorManager';
 import { useCanvasState } from '../../hooks/useCanvasState';
+import { EnhancedParticleSystem } from './EnhancedParticleSystem';
 
 export interface VisualParameters {
   particleCount: number;
@@ -17,57 +18,39 @@ interface VisualSystemProps {
   params: VisualParameters;
 }
 
-// Move zone calculations outside component
-const calculateZoneParams = (baseParams: VisualParameters, viewport: { width: number; height: number }) => {
-  const horizontalSpacing = Math.min(viewport.width, viewport.height) * 0.3;
-  const verticalSpacing = Math.min(viewport.width, viewport.height) * 0.2;
+// Memoized components for better performance
+const MemoizedFlowField = memo(FlowField);
+const MemoizedParticleSystem = memo(EnhancedParticleSystem);
+
+function calculateZoneParams(params: VisualParameters, viewport: { width: number; height: number }) {
+  const zones = [];
+  const zoneCount = Math.max(1, Math.floor(params.zoneDiversity * 4));
   
-  return [
-    // Left zone
-    { 
-      position: new Vector3(-horizontalSpacing, -verticalSpacing, 0), 
-      scale: 1.2, 
-      params: { 
-        ...baseParams, 
-        flowSpeed: baseParams.flowSpeed * 1.2,
-        particleCount: Math.floor(baseParams.particleCount * 0.8)
-      } 
-    },
-    // Right zone
-    { 
-      position: new Vector3(horizontalSpacing, verticalSpacing, 0), 
-      scale: 0.8, 
-      params: { 
-        ...baseParams, 
-        flowSpeed: baseParams.flowSpeed * 0.8,
-        particleCount: Math.floor(baseParams.particleCount * 0.8)
-      } 
-    },
-    // Center zone
-    { 
-      position: new Vector3(0, 0, 0), 
-      scale: 1.0, 
-      params: { 
-        ...baseParams, 
-        particleCount: Math.floor(baseParams.particleCount * 1.2),
-        flowSpeed: baseParams.flowSpeed * 1.0
-      } 
-    }
-  ];
-};
+  for (let i = 0; i < zoneCount; i++) {
+    const angle = (i / zoneCount) * Math.PI * 2;
+    const radius = Math.min(viewport.width, viewport.height) * 0.6;
+    
+    const verticalOffset = (Math.random() - 0.5) * viewport.height * 0.4;
+    
+    zones.push({
+      position: new Vector3(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * radius + verticalOffset,
+        0
+      ),
+      scale: new Vector3(1.2, 1.2, 1.2),
+      params: {
+        ...params,
+        particleCount: Math.floor(params.particleCount / zoneCount),
+        flowSpeed: params.flowSpeed * (0.9 + Math.random() * 0.4),
+        ribbonLength: params.ribbonLength * (0.8 + Math.random() * 0.4)
+      }
+    });
+  }
+  
+  return zones;
+}
 
-// Memoize the FlowField component with more specific props
-const MemoizedFlowField = memo(FlowField, (prevProps, nextProps) => {
-  return (
-    prevProps.count === nextProps.count &&
-    prevProps.length === nextProps.length &&
-    prevProps.flowSpeed === nextProps.flowSpeed &&
-    prevProps.colorIntensity === nextProps.colorIntensity &&
-    prevProps.colorManager === nextProps.colorManager
-  );
-});
-
-// Memoize the VisualSystem component
 export const VisualSystem = memo(function VisualSystem({ params }: VisualSystemProps) {
   const colorManager = useRef(new ColorManager()).current;
   const { state } = useCanvasState();
@@ -95,7 +78,14 @@ export const VisualSystem = memo(function VisualSystem({ params }: VisualSystemP
         count={zone.params.particleCount}
         length={zone.params.ribbonLength}
         flowSpeed={zone.params.flowSpeed}
-        colorIntensity={zone.params.colorIntensity}
+        colorIntensity={zone.params.colorIntensity * 1.2}
+      />
+      <MemoizedParticleSystem
+        count={Math.floor(zone.params.particleCount * 0.6)}
+        size={0.2}
+        speed={zone.params.flowSpeed * 1.2}
+        colors={['#ff0000', '#00ff00', '#0000ff', '#ff00ff', '#00ffff']}
+        distribution="random"
       />
     </group>
   ), [colorManager]);
@@ -116,20 +106,12 @@ export const VisualSystem = memo(function VisualSystem({ params }: VisualSystemP
   }, [viewport.width, viewport.height, zones.length, state]);
 
   return (
-    <>
+    <group>
       {zones.map((zone, index) => (
         <React.Fragment key={`zone-${index}`}>
           {renderZone(zone)}
         </React.Fragment>
       ))}
-    </>
-  );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.params.particleCount === nextProps.params.particleCount &&
-    prevProps.params.flowSpeed === nextProps.params.flowSpeed &&
-    prevProps.params.ribbonLength === nextProps.params.ribbonLength &&
-    prevProps.params.colorIntensity === nextProps.params.colorIntensity &&
-    prevProps.params.zoneDiversity === nextProps.params.zoneDiversity
+    </group>
   );
 }); 

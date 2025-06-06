@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import { BufferGeometry, Float32BufferAttribute, PointsMaterial, Points } from 'three';
 import { ColorManager } from './ColorManager';
 
@@ -22,11 +22,11 @@ export const FlowField = React.memo(function FlowField({
   const hasLoggedRef = useRef(false);
   const { viewport } = useThree();
 
-  // Use fixed screen dimensions for coordinate space
+  // Use viewport dimensions for coordinate space
   const screenDimensions = useMemo(() => ({
-    width: 20,  // Fixed coordinate space width
-    height: 12  // 16:9-ish ratio
-  }), []); // Empty dependency array since these are constants
+    width: viewport.width,  // Use actual viewport width
+    height: viewport.height // Use actual viewport height
+  }), [viewport.width, viewport.height]); // Update when viewport changes
 
   // Log initialization only once
   useEffect(() => {
@@ -49,42 +49,30 @@ export const FlowField = React.memo(function FlowField({
     }
   }, [screenDimensions, viewport, count, length, flowSpeed, colorIntensity]);
 
-  // Create static positions for particles using manual screen coordinates
+  // Create dynamic positions for particles
   const { positions, colors } = useMemo(() => {
     const { width, height } = screenDimensions;
-    const pos = new Float32Array([
-      // Bottom row
-      -width/2, -height/2, 0,    // Bottom left
-      0, -height/2, 0,           // Bottom center
-      width/2, -height/2, 0,     // Bottom right
-      // Middle row
-      -width/2, 0, 0,            // Middle left
-      0, 0, 0,                   // Center
-      width/2, 0, 0,             // Middle right
-      // Top row
-      -width/2, height/2, 0,     // Top left
-      0, height/2, 0,            // Top center
-      width/2, height/2, 0       // Top right
-    ]);
+    const pos = new Float32Array(count * 3);
+    const cols = new Float32Array(count * 3);
     
-    // Define colors (RGB pattern)
-    const cols = new Float32Array([
-      // Bottom row
-      1, 0, 0,     // Red
-      0, 1, 0,     // Green
-      0, 0, 1,     // Blue
-      // Middle row
-      1, 0, 0,     // Red
-      0, 1, 0,     // Green
-      0, 0, 1,     // Blue
-      // Top row
-      1, 0, 0,     // Red
-      0, 1, 0,     // Green
-      0, 0, 1      // Blue
-    ]);
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      // Distribute particles randomly across the screen
+      pos[i3] = (Math.random() - 0.5) * width;
+      pos[i3 + 1] = (Math.random() - 0.5) * height;
+      pos[i3 + 2] = (Math.random() - 0.5) * 5; // Small z-depth variation
+      
+      // Use colorManager for dynamic colors
+      const colorKeys = ['primary', 'secondary', 'accent1', 'accent2', 'accent3'] as const;
+      const colorKey = colorKeys[i % colorKeys.length];
+      const color = colorManager.getColor(colorKey);
+      cols[i3] = color.r;
+      cols[i3 + 1] = color.g;
+      cols[i3 + 2] = color.b;
+    }
     
     return { positions: pos, colors: cols };
-  }, [screenDimensions]); // Only recompute if screen dimensions change
+  }, [screenDimensions, count, colorManager]);
 
   // Create geometry and material
   const geometry = useMemo(() => {
@@ -96,13 +84,31 @@ export const FlowField = React.memo(function FlowField({
 
   const material = useMemo(() => {
     return new PointsMaterial({
-      size: 0.5,
+      size: 0.2,  // Increased size
       vertexColors: true,
       transparent: true,
-      opacity: 1.0,
-      sizeAttenuation: true
+      opacity: 0.8,
+      sizeAttenuation: true,
+      blending: 2  // Additive blending for better visibility
     });
-  }, []); // Empty dependency array since material properties are static
+  }, []);
+
+  // Add animation
+  useFrame((state, delta) => {
+    if (!pointsRef.current) return;
+    
+    const positions = pointsRef.current.geometry.attributes.position.array as Float32Array;
+    const time = state.clock.elapsedTime;
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      // Add organic movement
+      positions[i] += Math.sin(time * flowSpeed + positions[i + 1] * 0.1) * delta * flowSpeed;
+      positions[i + 1] += Math.cos(time * flowSpeed + positions[i] * 0.1) * delta * flowSpeed;
+      positions[i + 2] += Math.sin(time * flowSpeed * 0.5 + positions[i] * 0.05) * delta * flowSpeed * 0.5;
+    }
+    
+    pointsRef.current.geometry.attributes.position.needsUpdate = true;
+  });
 
   return (
     <primitive

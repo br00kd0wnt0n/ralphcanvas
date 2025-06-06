@@ -3,18 +3,29 @@ import { VisualParameters } from './VisualSystem';
 
 interface VisualControlsProps {
   params: VisualParameters;
-  onParamsChange: (params: VisualParameters) => void;
+  onParamsChange?: (params: VisualParameters) => void;
 }
 
 export function VisualControls({ params, onParamsChange }: VisualControlsProps) {
   const [isVisible, setIsVisible] = useState(true);
 
   const handleParamChange = (key: keyof VisualParameters, value: number) => {
-    onParamsChange({
+    onParamsChange && onParamsChange({
       ...params,
       [key]: value
     });
   };
+
+  // If onParamsChange is not provided, render a read-only view
+  if (!onParamsChange) {
+    return (
+      <div className="absolute top-4 left-4 text-white text-sm opacity-50">
+        <p>Flow Speed: {params.flowSpeed.toFixed(2)}</p>
+        <p>Particles: {params.particleCount}</p>
+        <p>Turbulence: {params.zoneDiversity.toFixed(2)}</p>
+      </div>
+    );
+  }
 
   return (
     <div
