@@ -1,25 +1,17 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { CanvasStateManager } from '@/core/CanvasStateManager';
+import { NextApiRequest, NextApiResponse } from 'next';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    return res.status(405).end('Method Not Allowed');
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  try {
-    const canvasId = typeof req.query.canvasId === 'string' ? req.query.canvasId : 'default';
-    const stateManager = new CanvasStateManager(canvasId);
-    await stateManager.initialize();
-    const state = stateManager.getState();
-
-    if (!state) {
-      return res.status(404).json({ status: 'error', message: 'Canvas state not found' });
-    }
-
-    res.status(200).json(state);
-  } catch (error) {
-    console.error('Error fetching current canvas state:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch canvas state' });
-  }
+  
+  const mockState = {
+    id: 'canvas-1',
+    version: '1.0',
+    timeOfDay: new Date().getHours(),
+    weatherData: { location: 'Tokyo', temperature: 20 },
+    status: 'foundation-working'
+  };
+  
+  return res.status(200).json(mockState);
 } 

@@ -5,7 +5,7 @@ Ralph Canvas is a 24-hour evolving visual engine for our agency homepage. It is 
 ## Features
 - Real-time collaborative canvas state management
 - Modular architecture for easy extension
-- Database integration (PostgreSQL + TypeORM)
+- Database integration (PostgreSQL + Supabase)
 - Performance-focused from the start
 
 ## Getting Started
@@ -43,7 +43,7 @@ Ralph Canvas is a 24-hour evolving visual engine for our agency homepage. It is 
 ralphcanvas/
 ├── src/
 │   ├── core/                # Core logic (CanvasStateManager, etc.)
-│   ├── database/            # Database integration (TypeORM, entities)
+│   ├── database/            # Database integration (Supabase)
 │   ├── types/               # TypeScript types
 │   └── ...                  # (visual engine, API, admin, etc. to come)
 ├── package.json

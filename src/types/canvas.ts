@@ -1,7 +1,9 @@
 export enum OperationType {
-  ADD = 'ADD',
-  UPDATE = 'UPDATE',
-  DELETE = 'DELETE'
+  UPDATE_WEATHER = 'UPDATE_WEATHER',
+  UPDATE_FLOW = 'UPDATE_FLOW',
+  UPDATE_PARTICLES = 'UPDATE_PARTICLES',
+  UPDATE_COLORS = 'UPDATE_COLORS',
+  UPDATE_TIME = 'UPDATE_TIME'
 }
 
 export interface CanvasElement {
@@ -14,8 +16,7 @@ export interface CanvasElement {
 
 export interface CanvasOperation {
   type: OperationType;
-  elementId: string;
-  element?: CanvasElement;
+  data: Partial<WeatherData | FlowParameters | Record<string, ParticleConfig> | ColorPalette | { timeOfDay: number }>;
   timestamp: Date;
 }
 
@@ -26,11 +27,58 @@ export interface CanvasMetadata {
   lastModifiedBy: string;
 }
 
+export interface WeatherData {
+  temperature: number;
+  humidity: number;
+  windSpeed: number;
+  precipitation: number;
+  cloudCover: number;
+}
+
+export interface ColorPalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
+
+export interface FlowParameters {
+  velocity: number;
+  turbulence: number;
+  direction: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  scale: number;
+}
+
+export interface ParticleConfig {
+  count: number;
+  size: number;
+  speed: number;
+  lifetime: number;
+  color: string;
+}
+
 export interface CanvasState {
-  elements: Record<string, CanvasElement>;
+  id: string;
+  themeId: string;
+  weatherData: WeatherData;
+  timeOfDay: number; // 0-24 representing hour of day
+  evolutionStep: number;
+  colorPalette: ColorPalette;
+  flowParameters: FlowParameters;
+  particleConfigs: Record<string, ParticleConfig>;
+  lastUpdated: Date;
   version: number;
-  lastModified: Date;
-  metadata: CanvasMetadata;
+  metadata: {
+    name: string;
+    createdBy: string;
+    createdAt: Date;
+    lastModifiedBy: string;
+  };
 }
 
 export interface CanvasSnapshot {
