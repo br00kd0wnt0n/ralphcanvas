@@ -1,20 +1,25 @@
 import { v4 as uuidv4 } from 'uuid';
 import { CanvasState, CanvasElement, CanvasOperation, OperationType } from '../types/canvas';
-import { DatabaseManager } from '../database/DatabaseManager';
+import { createClient } from '@supabase/supabase-js';
 import { EventEmitter } from 'events';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export class CanvasStateManager extends EventEmitter {
   private state: CanvasState;
-  private databaseManager: DatabaseManager;
   private pendingOperations: CanvasOperation[] = [];
   private operationTimeout: NodeJS.Timeout | null = null;
   private readonly OPERATION_BATCH_INTERVAL = 1000; // 1 second
+  private canvasId: string;
 
-  constructor(databaseManager: DatabaseManager) {
+  constructor(canvasId: string = 'default-canvas') {
     super();
-    this.databaseManager = databaseManager;
+    this.canvasId = canvasId;
     this.state = {
-      elements: new Map(),
+      elements: {},
       version: 0,
       lastModified: new Date(),
       metadata: {
@@ -26,12 +31,34 @@ export class CanvasStateManager extends EventEmitter {
     };
   }
 
-  async initialize(canvasId?: string): Promise<void> {
-    if (canvasId) {
-      const savedState = await this.databaseManager.loadCanvasState(canvasId);
-      if (savedState) {
-        this.state = savedState;
+  async initialize(): Promise<void> {
+    try {
+      const { data: currentState, error } = await supabase
+        .from('canvas_states')
+        .select('*')
+        .eq('canvas_id', this.canvasId)
+        .order('version', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw error;
       }
+
+      if (currentState) {
+        this.state = currentState.state;
+        if (typeof this.state.lastModified === 'string') {
+          this.state.lastModified = new Date(this.state.lastModified);
+        }
+        if (this.state.metadata) {
+          if (typeof this.state.metadata.createdAt === 'string') {
+            this.state.metadata.createdAt = new Date(this.state.metadata.createdAt);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize canvas state:', error);
+      throw error;
     }
   }
 
@@ -40,7 +67,7 @@ export class CanvasStateManager extends EventEmitter {
   }
 
   getElement(elementId: string): CanvasElement | undefined {
-    return this.state.elements.get(elementId);
+    return this.state.elements[elementId];
   }
 
   async applyOperation(operation: CanvasOperation): Promise<void> {
@@ -67,11 +94,11 @@ export class CanvasStateManager extends EventEmitter {
   private validateOperation(operation: CanvasOperation): boolean {
     switch (operation.type) {
       case OperationType.ADD:
-        return !this.state.elements.has(operation.elementId);
+        return !this.state.elements[operation.elementId];
       case OperationType.UPDATE:
-        return this.state.elements.has(operation.elementId);
+        return !!this.state.elements[operation.elementId];
       case OperationType.DELETE:
-        return this.state.elements.has(operation.elementId);
+        return !!this.state.elements[operation.elementId];
       default:
         return false;
     }
@@ -80,15 +107,13 @@ export class CanvasStateManager extends EventEmitter {
   private applyOperationToState(operation: CanvasOperation): void {
     switch (operation.type) {
       case OperationType.ADD:
-        this.state.elements.set(operation.elementId, operation.element);
-        break;
       case OperationType.UPDATE:
         if (operation.element) {
-          this.state.elements.set(operation.elementId, operation.element);
+          this.state.elements[operation.elementId] = operation.element;
         }
         break;
       case OperationType.DELETE:
-        this.state.elements.delete(operation.elementId);
+        delete this.state.elements[operation.elementId];
         break;
     }
     this.state.version++;
@@ -99,7 +124,19 @@ export class CanvasStateManager extends EventEmitter {
     if (this.pendingOperations.length === 0) return;
 
     try {
-      await this.databaseManager.saveOperations(this.pendingOperations);
+      const { error } = await supabase
+        .from('canvas_operations')
+        .insert(
+          this.pendingOperations.map(op => ({
+            canvas_id: this.canvasId,
+            operation_type: op.type,
+            element_id: op.elementId,
+            element: op.element,
+            timestamp: op.timestamp.toISOString()
+          }))
+        );
+
+      if (error) throw error;
       this.pendingOperations = [];
     } catch (error) {
       console.error('Failed to save operations:', error);
@@ -131,7 +168,7 @@ export class CanvasStateManager extends EventEmitter {
   }
 
   async updateElement(elementId: string, properties: any): Promise<void> {
-    const existingElement = this.state.elements.get(elementId);
+    const existingElement = this.state.elements[elementId];
     if (!existingElement) {
       throw new Error(`Element ${elementId} not found`);
     }
@@ -153,7 +190,7 @@ export class CanvasStateManager extends EventEmitter {
   }
 
   async deleteElement(elementId: string): Promise<void> {
-    if (!this.state.elements.has(elementId)) {
+    if (!this.state.elements[elementId]) {
       throw new Error(`Element ${elementId} not found`);
     }
 
@@ -164,6 +201,60 @@ export class CanvasStateManager extends EventEmitter {
     };
 
     await this.applyOperation(operation);
+  }
+
+  async evolveState(userId: string): Promise<CanvasState> {
+    try {
+      // Get pending operations
+      const { data: operations, error: opsError } = await supabase
+        .from('canvas_operations')
+        .select('*')
+        .eq('canvas_id', this.canvasId)
+        .gt('timestamp', this.state.lastModified.toISOString())
+        .order('timestamp', { ascending: true });
+
+      if (opsError) throw opsError;
+
+      // Apply operations to evolve state
+      for (const op of operations || []) {
+        const operation = op as CanvasOperation;
+        switch (operation.type) {
+          case OperationType.ADD:
+          case OperationType.UPDATE:
+            if (operation.element) {
+              this.state.elements[operation.elementId] = operation.element;
+            }
+            break;
+          case OperationType.DELETE:
+            delete this.state.elements[operation.elementId];
+            break;
+        }
+      }
+
+      // Update state version and timestamp
+      this.state.version++;
+      this.state.lastModified = new Date();
+      this.state.metadata.lastModifiedBy = userId;
+
+      // Save evolved state
+      const { error: saveError } = await supabase
+        .from('canvas_states')
+        .insert({
+          canvas_id: this.canvasId,
+          version: this.state.version,
+          state: this.state,
+          created_by: userId,
+          created_at: new Date().toISOString()
+        });
+
+      if (saveError) throw saveError;
+
+      this.emit('stateChange', this.state);
+      return this.getState();
+    } catch (error) {
+      console.error('Failed to evolve state:', error);
+      throw error;
+    }
   }
 
   // Cleanup method to be called when shutting down

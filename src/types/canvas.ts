@@ -27,7 +27,7 @@ export interface CanvasMetadata {
 }
 
 export interface CanvasState {
-  elements: Map<string, CanvasElement>;
+  elements: Record<string, CanvasElement>;
   version: number;
   lastModified: Date;
   metadata: CanvasMetadata;
